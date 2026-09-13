@@ -113,9 +113,33 @@ const PATTERN_CONFIDENCE_HIERARCHY: Record<string, number> = {
   'falling-three-methods': 0.35,
 };
 
+// BUGFIX (регрессия 2026-09-13): предыдущий фикс в этой сессии убрал
+// volumeBonus целиком, аргументируя тем, что каждый детектор уже учитывает
+// объём в своей confidence. Это верно для большинства паттернов, но НЕВЕРНО
+// для трёх, где объём входит только как бинарный hard-gate, а единственной
+// градацией между «прошёл порог» и «объём 2x/4x» был именно этот +0.1 бонус:
+//
+// 1. liquidity-sweep (liquidity-sweep.ts:149) — confidence = depthInAtr/1.5
+//    * session * (1+confluenceBonus) * (setupType ? 0.9 : htfAlignment).
+//    volRatio — только бинарный hard-gate на 1.5x (строка 120), в само
+//    произведение не входит. volumeConfirmed (строка 165) использует строгий
+//    порог 2.0x именно чтобы питать этот бонус.
+// 2. rising-three-methods (continuation.ts:320-327) — confidence = base
+//    * (0.6+0.4*filtersRatio) * sessionBoost * rsiZoneFactor * atrFactor
+//    * volatilityBonus. Объёма в формуле нет. volumeConfirmed (строка 339)
+//    с порогом 1.5x существует исключительно для этого бонуса (см. комментарий
+//    на строках 336-338).
+// 3. falling-three-methods (continuation.ts:447-454) — зеркально, строка 463.
+const PATTERNS_WITHOUT_OWN_VOLUME_GRADATION = new Set<PatternResult['name']>([
+  'liquidity-sweep',
+  'rising-three-methods',
+  'falling-three-methods',
+]);
+
 export function applyConfidenceHierarchy(p: PatternResult): PatternResult {
+  const volumeBonus = (p.volumeConfirmed && PATTERNS_WITHOUT_OWN_VOLUME_GRADATION.has(p.name)) ? 0.1 : 0;
   const baseConfidence = PATTERN_CONFIDENCE_HIERARCHY[p.name] ?? p.confidence;
-  const confidence = Math.min(1, Math.max(p.confidence, baseConfidence));
+  const confidence = Math.min(1, Math.max(p.confidence, baseConfidence) + volumeBonus);
   const strength: PatternResult['strength'] =
     confidence >= 0.75 ? 'strong' : confidence >= 0.5 ? 'moderate' : 'weak';
   return { ...p, confidence, strength };
@@ -148,6 +172,11 @@ export function detectAllPatterns(
   atrPeriod: number = 14,
   macdConfig?: { fast: number; slow: number; signal: number },
   harmonicConfig?: HarmonicConfig,
+  // Test-only override: when provided, skips the real computeHtfStructure()
+  // call and uses this MarketStructure as the HTF confluence source for all
+  // single/double/triple/mean-reversion/strong-OB-reaction detectors. In
+  // production (full-snapshot.ts) this parameter is never passed — the real
+  // M15-resampled structure from computeHtfStructure() is always used.
   htfStructureOverride?: MarketStructure,
 ): PatternResult[] {
   if (candles.length < 2) return [];

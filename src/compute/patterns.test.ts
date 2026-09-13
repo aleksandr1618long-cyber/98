@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectAllPatterns } from '@/compute/patterns';
+import { detectAllPatterns, applyConfidenceHierarchy } from '@/compute/patterns';
 import { detectHammer, detectDoji, detectShootingStar, detectInvertedHammer, detectHangingMan, detectMarubozuBullish, detectMarubozuBearish } from '@/compute/patterns/single';
 import { detectBullishEngulfing, detectBearishEngulfing, detectBullishHarami, detectBearishHarami, detectPiercingLine, detectDarkCloudCover, detectTweezerBottom, detectTweezerTop } from '@/compute/patterns/double';
 import {
@@ -1627,6 +1627,23 @@ describe('Rising/Falling Three Methods (continuation.ts, Промт 4)', () => {
       // old hardcoded 0.7/0.8 values used before the Промт 4 refactor.
       expect(risingResult!.confidence).not.toBe(0.7);
       expect(risingResult!.confidence).not.toBe(0.8);
+    });
+
+    it('rising-three-methods: volumeConfirmed +0.1 bonus is the sole volume gradation (regression guard)', () => {
+      // The detector's confidence formula (continuation.ts:320-327) has no
+      // volume term — volume enters only as the binary volumeConfirmed flag.
+      // applyConfidenceHierarchy converts that flag to +0.1 (added after the
+      // Math.max floor). Verify directly: take the raw detector output, run
+      // it through applyConfidenceHierarchy, and confirm the +0.1 is present
+      // by comparing with a version where volumeConfirmed is forced to false.
+      const ctx = buildRising(0);
+      const raw = detectRisingThreeMethods(ctx);
+      expect(raw).toBeDefined();
+      expect(raw!.volumeConfirmed).toBe(true);
+      const withBonus = applyConfidenceHierarchy(raw!);
+      const withoutVolume = { ...raw!, volumeConfirmed: false };
+      const withoutBonus = applyConfidenceHierarchy(withoutVolume);
+      expect(withBonus.confidence - withoutBonus.confidence).toBeCloseTo(0.1, 5);
     });
   });
 });
