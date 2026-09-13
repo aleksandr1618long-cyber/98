@@ -115,8 +115,7 @@ const PATTERN_CONFIDENCE_HIERARCHY: Record<string, number> = {
 
 export function applyConfidenceHierarchy(p: PatternResult): PatternResult {
   const baseConfidence = PATTERN_CONFIDENCE_HIERARCHY[p.name] ?? p.confidence;
-  const volumeBonus = p.volumeConfirmed ? 0.1 : 0;
-  const confidence = Math.min(1, Math.max(p.confidence, baseConfidence) + volumeBonus);
+  const confidence = Math.min(1, Math.max(p.confidence, baseConfidence));
   const strength: PatternResult['strength'] =
     confidence >= 0.75 ? 'strong' : confidence >= 0.5 ? 'moderate' : 'weak';
   return { ...p, confidence, strength };
@@ -149,6 +148,7 @@ export function detectAllPatterns(
   atrPeriod: number = 14,
   macdConfig?: { fast: number; slow: number; signal: number },
   harmonicConfig?: HarmonicConfig,
+  htfStructureOverride?: MarketStructure,
 ): PatternResult[] {
   if (candles.length < 2) return [];
 
@@ -178,7 +178,7 @@ export function detectAllPatterns(
   // текущего тренда" (hasPrecedingBearish/Bullish, structure.trend/bos/choch
   // внутри самих детекторов) — это два разных, теперь действительно
   // независимых измерения, а не одно и то же дважды.
-  const htfStructure = computeHtfStructure(candles, atrPeriod);
+  const htfStructure = htfStructureOverride ?? computeHtfStructure(candles, atrPeriod);
 
   // Build PatternContext for the 6 context-aware patterns.
   // patternCandle = candles[length - 2], confirmCandle = candles[length - 1].
@@ -336,14 +336,4 @@ export function detectPatterns(candles: Candle[]): PatternResult[] {
   return detectAllPatterns(candles, [] as FeatureName[], undefined);
 }
 
-export function patternDirection(name: PatternResult['name']): 'buy' | 'sell' {
-  if (name === 'bullish-engulfing' || name === 'hammer' || name === 'morning-star' || name === 'bullish-harami' ||
-      name === 'three-white-soldiers' || name === 'abandoned-baby-bottom' || name === 'piercing-line' ||
-      name === 'tweezer-bottom' || name === 'inverted-hammer' || name === 'marubozu-bullish' ||
-      name === 'rising-three-methods') return 'buy';
-  if (name === 'bearish-engulfing' || name === 'shooting-star' || name === 'evening-star' || name === 'bearish-harami' ||
-      name === 'three-black-crows' || name === 'abandoned-baby-top' || name === 'dark-cloud-cover' ||
-      name === 'tweezer-top' || name === 'hanging-man' || name === 'marubozu-bearish' ||
-      name === 'falling-three-methods') return 'sell';
-  return 'buy';
-}
+

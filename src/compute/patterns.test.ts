@@ -130,7 +130,7 @@ describe('detectAllPatterns', () => {
       candle(baseTime - 1 * 60, 97, 102, 102.2, 96.8, 200),
       candle(baseTime, 102, 104, 104.5, 101.5, 100),
     ];
-    const patterns = detectAllPatterns(candles, ALL, undefined, UP_STRUCTURE);
+    const patterns = detectAllPatterns(candles, ALL, undefined, UP_STRUCTURE, undefined, 14, undefined, undefined, UP_STRUCTURE);
     expect(patterns.some((p) => p.name === 'bullish-engulfing')).toBe(true);
   });
 
@@ -149,7 +149,7 @@ describe('detectAllPatterns', () => {
       candle(baseTime - 1 * 60, 103, 98, 103.2, 97.8, 200),
       candle(baseTime, 98, 96, 98.5, 95.5, 100),
     ];
-    const patterns = detectAllPatterns(candles, ALL, undefined, DOWN_STRUCTURE);
+    const patterns = detectAllPatterns(candles, ALL, undefined, DOWN_STRUCTURE, undefined, 14, undefined, undefined, DOWN_STRUCTURE);
     expect(patterns.some((p) => p.name === 'bearish-engulfing')).toBe(true);
   });
 
@@ -188,9 +188,8 @@ describe('detectAllPatterns', () => {
       candle(baseTime - 1 * 60, 2.5, 2.8, 2.85, 0.5, 200), // pattern: small body up top, long lower wick
       candle(baseTime, 2.5, 4, 4.2, 2.4, 150), // confirmation: strong close above pattern body
     ];
-    const patterns = detectAllPatterns(candles, ALL, undefined, {
-      trend: 'down', bos: false, choch: true, swingHigh: 16, swingLow: 0, provisional: false,
-    });
+    const downStruct = { trend: 'down', bos: false, choch: true, swingHigh: 16, swingLow: 0, provisional: false } as const;
+    const patterns = detectAllPatterns(candles, ALL, undefined, downStruct, undefined, 14, undefined, undefined, downStruct);
     const hammer = patterns.find((p) => p.name === 'hammer');
     expect(hammer).toBeDefined();
     expect(hammer?.direction).toBe('buy');
@@ -849,6 +848,10 @@ describe('double-bar patterns: session derived from curCandle time (regression)'
       NO_INDICATORS,
       UP_STRUCTURE,
       EMPTY_SMART_MONEY,
+      14,
+      undefined,
+      undefined,
+      UP_STRUCTURE,
     );
     const engulfing = patterns.find((p) => p.name === 'bullish-engulfing');
     expect(engulfing).toBeDefined();
